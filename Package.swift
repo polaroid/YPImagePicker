@@ -21,7 +21,7 @@ let package = Package(
         .package(
             name: "Stevia",
             url: "git@github.com:freshOS/Stevia.git",
-            .upToNextMajor(from: .init(5, 1, 1))
+            .upToNextMajor(from: .init(6, 2, 0))
         )
     ],
     targets: [
