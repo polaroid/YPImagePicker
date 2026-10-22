@@ -451,15 +451,31 @@ public class YPLibraryVC: UIViewController, YPPermissionCheckable {
     public func selectedMedia(photoCallback: @escaping (_ photo: YPMediaPhoto) -> Void,
                               videoCallback: @escaping (_ videoURL: YPMediaVideo) -> Void,
                               multipleItemsCallback: @escaping (_ items: [YPMediaItem]) -> Void) {
+        // Library changes update selection on the main queue. Export a stable snapshot.
+        let selection = self.selection
+        let multipleSelectionEnabled = self.multipleSelectionEnabled
         DispatchQueue.global(qos: .userInitiated).async {
             
-            let selectedAssets: [(asset: PHAsset, cropRect: CGRect?)] = self.selection.map {
-                guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [$0.assetIdentifier], options: PHFetchOptions()).firstObject else { fatalError() }
+            let selectedAssets: [(asset: PHAsset, cropRect: CGRect?)] = selection.compactMap {
+                guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [$0.assetIdentifier], options: PHFetchOptions()).firstObject else { return nil }
                 return (asset, $0.cropRect)
+            }
+
+            // Access can be revoked before the library change notification arrives.
+            // Refresh the picker and let the user confirm a new selection rather than
+            // exporting a partial selection or keeping an inaccessible preview.
+            guard selectedAssets.count == selection.count, let firstAsset = selectedAssets.first else {
+                DispatchQueue.main.async {
+                    self.selection.removeAll()
+                    self.scrollToItem = nil
+                    self.delegate?.libraryViewFinishedLoading()
+                    self.refreshMediaRequest()
+                }
+                return
             }
             
             // Multiple selection
-            if self.multipleSelectionEnabled && self.selection.count > 1 {
+            if multipleSelectionEnabled && selectedAssets.count > 1 {
                 
                 // Check video length
                 for asset in selectedAssets {
@@ -500,7 +516,7 @@ public class YPLibraryVC: UIViewController, YPPermissionCheckable {
                     self.delegate?.libraryViewFinishedLoading()
                 }
             } else {
-                let asset = selectedAssets.first!.asset
+                let asset = firstAsset.asset
                 switch asset.mediaType {
                 case .video:
                     self.checkVideoLengthAndCrop(for: asset, callback: { videoURL in
