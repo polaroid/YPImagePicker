@@ -174,7 +174,13 @@ public class YPLibraryVC: UIViewController, YPPermissionCheckable {
     
     @objc
     func multipleSelectionButtonTapped() {
-        
+        // The button can be tapped before the library is fetched or after its assets change.
+        guard mediaManager.hasFetchResults,
+              currentlySelectedIndex >= 0,
+              currentlySelectedIndex < mediaManager.fetchCount else {
+            return
+        }
+
         if !multipleSelectionEnabled {
             selection.removeAll()
         }
